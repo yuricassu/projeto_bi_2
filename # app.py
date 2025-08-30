@@ -5,7 +5,6 @@ import zipfile, json, re
 from io import BytesIO
 
 st.set_page_config(page_title="Auditoria Power BI", layout="wide")
-
 st.title("🔎 Auditoria de Modelos Power BI (.pbit)")
 
 # -----------------------------
@@ -147,13 +146,51 @@ if uploaded_file:
     st.dataframe(ranking_df)
 
     # -----------------------------
-    # Download Excel
+    # Criar Excel com Dashboard, Ranking e Auditoria
     # -----------------------------
     st.header("💾 Download Excel Completo")
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+
+        # Abas de auditoria
         for sheet_name, df in results.items():
-            df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+            safe_name = sheet_name[:31]
+            df.to_excel(writer, sheet_name=safe_name, index=False)
+            worksheet = writer.sheets[safe_name]
+            header_format = workbook.add_format({'bold': True, 'bg_color': '#DCE6F1', 'border': 1})
+            for col_num, value in enumerate(df.columns):
+                worksheet.write(0, col_num, value, header_format)
+                max_len = max(df[value].astype(str).map(len).max(), len(value)) + 2 if not df.empty else len(value)+2
+                worksheet.set_column(col_num, col_num, max_len)
+
+        # Aba Ranking
         ranking_df.to_excel(writer, sheet_name="Ranking_Problemas", index=False)
+        ranking_ws = writer.sheets["Ranking_Problemas"]
+        for col_num, value in enumerate(ranking_df.columns):
+            ranking_ws.write(0, col_num, value, workbook.add_format({'bold': True, 'bg_color':'#FFD966'}))
+            max_len = max(ranking_df[value].astype(str).map(len).max(), len(value)) + 2
+            ranking_ws.set_column(col_num, col_num, max_len)
+
+        # Aba Dashboard
+        dashboard = workbook.add_worksheet("Dashboard")
+        categories = ["Colunas não usadas", "Medidas duplicadas", "Campos sem descrição", "Tabelas órfãs"]
+        values = [len(results["unused_columns"]), len(results["duplicate_measures"]),
+                  len(results["missing_descriptions"]), len(results["orphan_tables"])]
+        dashboard.write_row("A1", ["Categoria", "Quantidade"])
+        for i, cat in enumerate(categories):
+            dashboard.write_row(f"A{i+2}", [cat, values[i]])
+
+        chart = workbook.add_chart({'type':'column'})
+        chart.add_series({
+            'categories': f"=Dashboard!$A$2:$A${len(categories)+1}",
+            'values': f"=Dashboard!$B$2:$B${len(categories)+1}",
+            'data_labels': {'value': True}
+        })
+        chart.set_title({'name': 'Resumo da Auditoria'})
+        chart.set_x_axis({'name':'Categoria'})
+        chart.set_y_axis({'name':'Quantidade'})
+        dashboard.insert_chart('D2', chart)
+
     output.seek(0)
     st.download_button("📥 Baixar Excel da Auditoria", data=output, file_name="Auditoria_Modelo_PBI.xlsx")
