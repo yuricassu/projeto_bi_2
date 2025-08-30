@@ -172,6 +172,29 @@ if uploaded_file:
             max_len = max(ranking_df[value].astype(str).map(len).max(), len(value)) + 2
             ranking_ws.set_column(col_num, col_num, max_len)
 
+        # Gráfico na aba Ranking
+        chart_ranking = workbook.add_chart({'type':'column'})
+        chart_ranking.add_series({
+            'name': 'Colunas Não Usadas',
+            'categories': f"=Ranking_Problemas!$A$2:$A${len(ranking_df)+1}",
+            'values': f"=Ranking_Problemas!$B$2:$B${len(ranking_df)+1}",
+            'data_labels': {'value': True},
+        })
+        chart_ranking.add_series({
+            'name': 'Medidas Duplicadas',
+            'values': f"=Ranking_Problemas!$C$2:$C${len(ranking_df)+1}",
+            'data_labels': {'value': True},
+        })
+        chart_ranking.add_series({
+            'name': 'Campos Sem Descrição',
+            'values': f"=Ranking_Problemas!$D$2:$D${len(ranking_df)+1}",
+            'data_labels': {'value': True},
+        })
+        chart_ranking.set_title({'name': 'Ranking de Problemas por Tabela'})
+        chart_ranking.set_x_axis({'name':'Tabela'})
+        chart_ranking.set_y_axis({'name':'Quantidade'})
+        ranking_ws.insert_chart('F2', chart_ranking)
+
         # Aba Dashboard
         dashboard = workbook.add_worksheet("Dashboard")
         categories = ["Colunas não usadas", "Medidas duplicadas", "Campos sem descrição", "Tabelas órfãs"]
@@ -181,16 +204,16 @@ if uploaded_file:
         for i, cat in enumerate(categories):
             dashboard.write_row(f"A{i+2}", [cat, values[i]])
 
-        chart = workbook.add_chart({'type':'column'})
-        chart.add_series({
+        chart_dashboard = workbook.add_chart({'type':'column'})
+        chart_dashboard.add_series({
             'categories': f"=Dashboard!$A$2:$A${len(categories)+1}",
             'values': f"=Dashboard!$B$2:$B${len(categories)+1}",
             'data_labels': {'value': True}
         })
-        chart.set_title({'name': 'Resumo da Auditoria'})
-        chart.set_x_axis({'name':'Categoria'})
-        chart.set_y_axis({'name':'Quantidade'})
-        dashboard.insert_chart('D2', chart)
+        chart_dashboard.set_title({'name': 'Resumo da Auditoria'})
+        chart_dashboard.set_x_axis({'name':'Categoria'})
+        chart_dashboard.set_y_axis({'name':'Quantidade'})
+        dashboard.insert_chart('D2', chart_dashboard)
 
     output.seek(0)
     st.download_button("📥 Baixar Excel da Auditoria", data=output, file_name="Auditoria_Modelo_PBI.xlsx")
