@@ -127,25 +127,6 @@ if uploaded_file:
             st.dataframe(df)
 
     # -----------------------------
-    # Ranking visual
-    # -----------------------------
-    st.header("🏆 Ranking de Problemas por Tabela")
-    ranking_df = pd.DataFrame({"table": [t["name"] for t in all_tables]})
-    ranking_df["colunas_nao_usadas"] = ranking_df["table"].apply(
-        lambda x: len([c for t,c in results["unused_columns"].values if t==x])
-    )
-    ranking_df["campos_sem_descricao"] = ranking_df["table"].apply(
-        lambda x: len([c for t,c in results["missing_descriptions"].values if t==x])
-    )
-    if results["duplicate_measures"].empty:
-        ranking_df["medidas_duplicadas"] = 0
-    else:
-        ranking_df["medidas_duplicadas"] = ranking_df["table"].apply(
-            lambda x: len([m for m in results["duplicate_measures"]["table1"].values if m==x])
-        )
-    st.dataframe(ranking_df)
-
-    # -----------------------------
     # Criar Excel com Dashboard, Ranking e Auditoria
     # -----------------------------
     st.header("💾 Download Excel Completo")
@@ -165,35 +146,33 @@ if uploaded_file:
                 worksheet.set_column(col_num, col_num, max_len)
 
         # Aba Ranking
+        ranking_df = pd.DataFrame({"table": [t["name"] for t in all_tables]})
+        ranking_df["colunas_nao_usadas"] = ranking_df["table"].apply(
+            lambda x: len([c for t,c in results["unused_columns"].values if t==x])
+        )
+        ranking_df["campos_sem_descricao"] = ranking_df["table"].apply(
+            lambda x: len([c for t,c in results["missing_descriptions"].values if t==x])
+        )
+        if results["duplicate_measures"].empty:
+            ranking_df["medidas_duplicadas"] = 0
+        else:
+            ranking_df["medidas_duplicadas"] = ranking_df["table"].apply(
+                lambda x: len([m for m in results["duplicate_measures"]["table1"].values if m==x])
+            )
+
         ranking_df.to_excel(writer, sheet_name="Ranking_Problemas", index=False)
         ranking_ws = writer.sheets["Ranking_Problemas"]
+
+        header_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFD966', 'border':1})
         for col_num, value in enumerate(ranking_df.columns):
-            ranking_ws.write(0, col_num, value, workbook.add_format({'bold': True, 'bg_color':'#FFD966'}))
+            ranking_ws.write(0, col_num, value, header_fmt)
             max_len = max(ranking_df[value].astype(str).map(len).max(), len(value)) + 2
             ranking_ws.set_column(col_num, col_num, max_len)
 
-        # Gráfico na aba Ranking
-        chart_ranking = workbook.add_chart({'type':'column'})
-        chart_ranking.add_series({
-            'name': 'Colunas Não Usadas',
-            'categories': f"=Ranking_Problemas!$A$2:$A${len(ranking_df)+1}",
-            'values': f"=Ranking_Problemas!$B$2:$B${len(ranking_df)+1}",
-            'data_labels': {'value': True},
-        })
-        chart_ranking.add_series({
-            'name': 'Medidas Duplicadas',
-            'values': f"=Ranking_Problemas!$C$2:$C${len(ranking_df)+1}",
-            'data_labels': {'value': True},
-        })
-        chart_ranking.add_series({
-            'name': 'Campos Sem Descrição',
-            'values': f"=Ranking_Problemas!$D$2:$D${len(ranking_df)+1}",
-            'data_labels': {'value': True},
-        })
-        chart_ranking.set_title({'name': 'Ranking de Problemas por Tabela'})
-        chart_ranking.set_x_axis({'name':'Tabela'})
-        chart_ranking.set_y_axis({'name':'Quantidade'})
-        ranking_ws.insert_chart('F2', chart_ranking)
+        # Barras de progresso na aba Ranking
+        for col_letter in ["B","C","D"]:
+            ranking_ws.conditional_format(f"{col_letter}2:{col_letter}{len(ranking_df)+1}",
+                                          {'type':'data_bar','bar_color':'#4F81BD'})
 
         # Aba Dashboard
         dashboard = workbook.add_worksheet("Dashboard")
@@ -204,16 +183,14 @@ if uploaded_file:
         for i, cat in enumerate(categories):
             dashboard.write_row(f"A{i+2}", [cat, values[i]])
 
-        chart_dashboard = workbook.add_chart({'type':'column'})
-        chart_dashboard.add_series({
+        chart = workbook.add_chart({'type':'column'})
+        chart.add_series({
             'categories': f"=Dashboard!$A$2:$A${len(categories)+1}",
             'values': f"=Dashboard!$B$2:$B${len(categories)+1}",
             'data_labels': {'value': True}
         })
-        chart_dashboard.set_title({'name': 'Resumo da Auditoria'})
-        chart_dashboard.set_x_axis({'name':'Categoria'})
-        chart_dashboard.set_y_axis({'name':'Quantidade'})
-        dashboard.insert_chart('D2', chart_dashboard)
+        chart.set_title({'name': 'Resumo da Auditoria'})
+        dashboard.insert_chart('D2', chart)
 
     output.seek(0)
     st.download_button("📥 Baixar Excel da Auditoria", data=output, file_name="Auditoria_Modelo_PBI.xlsx")
